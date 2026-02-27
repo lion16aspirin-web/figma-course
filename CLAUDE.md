@@ -136,6 +136,25 @@ Custom markdown-like parser — **no external libraries**.
 Supported syntax: `# ## ###` headings, `**bold**`, `` `code` ``, `> blockquote`, `- list`, ```` ``` ```` code block, `|` table rows.
 All rendered elements use CSS variables for color (no hardcoded colors).
 
+
+## Glossary tooltip system
+
+Terms in lesson content are auto-highlighted with a dashed underline (accent color).
+Hover (desktop) or tap (mobile) → shows a sticky-note style tooltip with a plain-language definition.
+
+**Files:**
+- `lib/glossary.ts` — 90 Ukrainian terms across 7 categories, exported as `glossaryEntries` sorted longest-first
+- `components/GlossaryTerm.tsx` — `"use client"` component, absolute-positioned tooltip, CSS arrow, fade animation
+- `app/globals.css` — `@keyframes glossary-fade-down/up` for tooltip entrance animation
+
+**Integration in `LessonContent.tsx`:**
+- `renderInline(text)` → splits bold/code → `applyGlossaryTerms()` → wraps found terms in `<GlossaryTerm>`
+- Applied to: `<p>` paragraphs and `<li>` list items only
+- NOT applied to: headings, code blocks, table cells (intentional)
+- Longest-first matching prevents "UI" from matching inside "UI-кіт"
+
+**To add new terms:** edit `lib/glossary.ts` in each course separately (4 independent files).
+
 ## Progress tracking (lib/progressContext.tsx)
 
 - `localStorage` key: `"figma_progress"` (JSON array of completed lesson IDs)

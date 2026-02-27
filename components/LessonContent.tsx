@@ -1,9 +1,11 @@
 "use client";
 
-import { ReactElement, useState } from "react";
+import { ReactElement, ReactNode, useState } from "react";
 import { useProgress } from "@/lib/progressContext";
 import { Lesson, Module } from "@/lib/courseData";
 import Link from "next/link";
+import GlossaryTerm from "@/components/GlossaryTerm";
+import { glossaryEntries } from "@/lib/glossary";
 
 interface Props {
   lesson: Lesson;
@@ -11,6 +13,95 @@ interface Props {
   nextLesson: { moduleId: string; lessonId: string; title: string } | null;
   prevLesson: { moduleId: string; lessonId: string; title: string } | null;
 }
+
+// ─── Glossary-aware inline renderer ───────────────────────────────────────────
+// Replaces dangerouslySetInnerHTML for paragraphs and list items.
+// Processes: **bold** → <strong>, `code` → <code>, glossary terms → <GlossaryTerm>
+
+function applyGlossaryTerms(text: string, baseKey: number): ReactNode[] {
+  if (!text) return [];
+  let remaining = text;
+  const segments: ReactNode[] = [];
+  let k = baseKey;
+
+  while (remaining.length > 0) {
+    let earliestIndex = -1;
+    let matchedEntry: { term: string; definition: string } | null = null;
+    let matchedActual = "";
+
+    for (const entry of glossaryEntries) {
+      const escaped = entry.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(?<![\\p{L}\\p{N}])(${escaped})(?![\\p{L}\\p{N}])`, "iu");
+      const match = regex.exec(remaining);
+      if (match && (earliestIndex === -1 || match.index < earliestIndex)) {
+        earliestIndex = match.index;
+        matchedEntry = entry;
+        matchedActual = match[1];
+      }
+    }
+
+    if (!matchedEntry || earliestIndex === -1) {
+      segments.push(remaining);
+      break;
+    }
+    if (earliestIndex > 0) segments.push(remaining.slice(0, earliestIndex));
+    segments.push(
+      <GlossaryTerm key={k++} term={matchedActual} definition={matchedEntry.definition} />
+    );
+    remaining = remaining.slice(earliestIndex + matchedActual.length);
+  }
+  return segments;
+}
+
+function applyCodeAndGlossary(text: string, baseKey: number): ReactNode[] {
+  const codeParts = text.split(/(`[^`\n]+`)/g);
+  const result: ReactNode[] = [];
+  let k = baseKey;
+  for (const part of codeParts) {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+      result.push(
+        <code
+          key={k++}
+          style={{
+            background: "var(--bg-overlay)",
+            color: "var(--accent-light)",
+            padding: "1px 4px",
+            borderRadius: "3px",
+            fontSize: "0.75rem",
+            fontFamily: "monospace",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    } else {
+      result.push(...applyGlossaryTerms(part, k));
+      k += 500;
+    }
+  }
+  return result;
+}
+
+function renderInline(text: string): ReactNode[] {
+  const boldParts = text.split(/(\*\*[^*]+\*\*)/g);
+  const result: ReactNode[] = [];
+  let k = 0;
+  for (const part of boldParts) {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      const inner = part.slice(2, -2);
+      result.push(
+        <strong key={k++} style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+          {applyCodeAndGlossary(inner, k * 1000)}
+        </strong>
+      );
+    } else {
+      result.push(...applyCodeAndGlossary(part, k * 1000));
+    }
+    k++;
+  }
+  return result;
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 function QuizComponent({ lesson, onComplete }: { lesson: Lesson; onComplete: () => void }) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -216,13 +307,7 @@ export default function LessonContent({ lesson, module, nextLesson, prevLesson }
             {items.map((item, idx) => (
               <li key={idx} className="flex gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
                 <span className="mt-0.5 shrink-0" style={{ color: "var(--accent-light)" }}>•</span>
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: item
-                      .replace(/\*\*(.*?)\*\*/g, `<strong style="color:var(--text-primary)">$1</strong>`)
-                      .replace(/`(.*?)`/g, `<code style="background:var(--bg-overlay);color:var(--accent-light);padding:1px 4px;border-radius:3px;font-size:0.75rem">$1</code>`),
-                  }}
-                />
+                <span>{renderInline(item)}</span>
               </li>
             ))}
           </ul>
@@ -318,16 +403,14 @@ export default function LessonContent({ lesson, module, nextLesson, prevLesson }
       } else if (line.trim() === "" || line.startsWith("---")) {
         // skip
       } else {
-        const html = line
-          .replace(/\*\*(.*?)\*\*/g, `<strong style="color:var(--text-primary)">$1</strong>`)
-          .replace(/`(.*?)`/g, `<code style="background:var(--bg-overlay);color:var(--accent-light);padding:1px 4px;border-radius:3px;font-size:0.75rem;font-family:monospace">$1</code>`);
         elements.push(
           <p
             key={nextKey()}
             className="leading-relaxed my-2 text-sm"
             style={{ color: "var(--text-secondary)" }}
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          >
+            {renderInline(line)}
+          </p>
         );
       }
 
