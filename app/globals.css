@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* ===== DARK THEME ===== */
+:root,
+[data-theme="dark"] {
+  --bg-base:       #0d1117;
+  --bg-elevated:   #161b22;
+  --bg-overlay:    #21262d;
+  --bg-muted:      rgba(33, 38, 45, 0.7);
+
+  --text-primary:  #e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:    #6e7681;
+  --text-faint:    #30363d;
+
+  --border-base:   #30363d;
+  --border-subtle: rgba(48, 54, 61, 0.7);
+
+  /* Accent — Purple */
+  --accent:        #a855f7;
+  --accent-hover:  #c084fc;
+  --accent-light:  #a855f7;
+  --accent-bg:     rgba(168, 85, 247, 0.1);
+  --accent-border: rgba(168, 85, 247, 0.25);
+
+  --scrollbar-thumb: #30363d;
+  --scrollbar-hover: #484f58;
+}
+
+/* ===== LIGHT THEME ===== */
+[data-theme="light"] {
+  --bg-base:       #ffffff;
+  --bg-elevated:   #f6f8fa;
+  --bg-overlay:    #eaeef2;
+  --bg-muted:      rgba(234, 238, 242, 0.8);
+
+  --text-primary:  #1c1917;
+  --text-secondary:#57534e;
+  --text-muted:    #78716c;
+  --text-faint:    #d6d3d1;
+
+  --border-base:   #d0d7de;
+  --border-subtle: rgba(208, 215, 222, 0.8);
+
+  /* Accent — Purple (darker for light bg) */
+  --accent:        #9333ea;
+  --accent-hover:  #7e22ce;
+  --accent-light:  #9333ea;
+  --accent-bg:     rgba(147, 51, 234, 0.08);
+  --accent-border: rgba(147, 51, 234, 0.25);
+
+  --scrollbar-thumb: #c4bfba;
+  --scrollbar-hover: #a8a29e;
+}
+
+/* ===== BASE ===== */
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
