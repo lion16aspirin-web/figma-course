@@ -1,33 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface Props {
   term: string;
   definition: string;
 }
 
-interface TooltipPos {
-  top: number;
-  left: number;
-  arrowLeft: number; // px from tooltip left edge
-  fadeUp: boolean;   // true = animate upward (tooltip is above term)
-}
-
 const TOOLTIP_W = 272;
-const MARGIN = 10; // min gap from viewport edges
+const MARGIN = 10;
 
 export default function GlossaryTerm({ term, definition }: Props) {
   const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState<TooltipPos>({ top: 0, left: 0, arrowLeft: TOOLTIP_W / 2, fadeUp: false });
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const [arrowLeft, setArrowLeft] = useState<number>(TOOLTIP_W / 2);
+  const [above, setAbove] = useState(false);
   const spanRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
   const isMobile = useRef(false);
 
   useEffect(() => {
     isMobile.current = window.matchMedia("(hover: none)").matches;
   }, []);
 
-  // Close on outside tap/click
+  // Close on outside tap
   useEffect(() => {
     if (!visible) return;
     const handler = (e: MouseEvent | TouchEvent) => {
@@ -43,7 +39,7 @@ export default function GlossaryTerm({ term, definition }: Props) {
     };
   }, [visible]);
 
-  // Close on scroll (fixed tooltip would otherwise float away)
+  // Close on scroll
   useEffect(() => {
     if (!visible) return;
     const handler = () => setVisible(false);
@@ -51,33 +47,43 @@ export default function GlossaryTerm({ term, definition }: Props) {
     return () => window.removeEventListener("scroll", handler);
   }, [visible]);
 
-  const calculatePosition = () => {
-    if (!spanRef.current) return;
-    const rect = spanRef.current.getBoundingClientRect();
+  // Recalculate position after tooltip renders (so we know its actual height)
+  useLayoutEffect(() => {
+    if (!visible || !spanRef.current) return;
+
+    const spanRect = spanRef.current.getBoundingClientRect();
+    const tooltipH = tooltipRef.current?.getBoundingClientRect().height ?? 120;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // ── Vertical: prefer below, flip above if not enough space ──────────────
-    const spaceBelow = vh - rect.bottom;
-    const spaceAbove = rect.top;
-    const above = spaceBelow < 200 && spaceAbove > spaceBelow;
+    // ── Vertical ────────────────────────────────────────────────────────────
+    const spaceBelow = vh - spanRect.bottom;
+    const isAbove = spaceBelow < tooltipH + 16 && spanRect.top > spaceBelow;
 
-    const tooltipTop = above
-      ? rect.top - 8   // will be offset by height via transform below
-      : rect.bottom + 8;
+    const topValue = isAbove
+      ? spanRect.top - tooltipH - 8
+      : spanRect.bottom + 8;
 
-    // ── Horizontal: center over span, clamp to viewport ─────────────────────
-    const spanCenterX = rect.left + rect.width / 2;
+    // ── Horizontal ──────────────────────────────────────────────────────────
+    // Center tooltip over the span
+    const spanCenterX = spanRect.left + spanRect.width / 2;
     const idealLeft = spanCenterX - TOOLTIP_W / 2;
     const clampedLeft = Math.max(MARGIN, Math.min(idealLeft, vw - TOOLTIP_W - MARGIN));
 
-    // Arrow points to span center, clamped within tooltip bounds
-    const arrowLeft = Math.max(12, Math.min(spanCenterX - clampedLeft, TOOLTIP_W - 12));
+    // Arrow points at span center, clamped to tooltip interior
+    const arrow = Math.max(12, Math.min(spanCenterX - clampedLeft, TOOLTIP_W - 12));
 
-    setPos({ top: tooltipTop, left: clampedLeft, arrowLeft, fadeUp: above });
-  };
+    setAbove(isAbove);
+    setArrowLeft(arrow);
+    setStyle({
+      position: "fixed",
+      top: topValue,
+      left: clampedLeft,
+      width: TOOLTIP_W,
+    });
+  }, [visible]);
 
-  const show = () => { calculatePosition(); setVisible(true); };
+  const show = () => setVisible(true);
   const hide = () => setVisible(false);
 
   return (
@@ -103,16 +109,11 @@ export default function GlossaryTerm({ term, definition }: Props) {
 
       {visible && (
         <span
+          ref={tooltipRef}
           role="tooltip"
-          aria-label={`Визначення: ${term}`}
           style={{
-            // fixed = relative to viewport, never clipped by parent overflow/padding
-            position: "fixed",
-            top: pos.fadeUp ? undefined : pos.top,
-            bottom: pos.fadeUp ? `${window.innerHeight - pos.top}px` : undefined,
-            left: pos.left,
+            ...style,
             zIndex: 9999,
-            width: `${TOOLTIP_W}px`,
             background: "#fef9c3",
             color: "#1c1917",
             borderRadius: "6px",
@@ -122,21 +123,21 @@ export default function GlossaryTerm({ term, definition }: Props) {
             fontSize: "0.78rem",
             lineHeight: "1.55",
             pointerEvents: "none",
-            animation: pos.fadeUp
+            animation: above
               ? "glossary-fade-up 0.18s ease forwards"
               : "glossary-fade-down 0.18s ease forwards",
           }}
         >
-          {/* Arrow — always points to the span center */}
+          {/* Arrow */}
           <span
             style={{
               position: "absolute",
-              left: pos.arrowLeft,
+              left: arrowLeft,
               transform: "translateX(-50%)",
               width: 0,
               height: 0,
               display: "block",
-              ...(pos.fadeUp
+              ...(above
                 ? {
                     bottom: "-6px",
                     borderLeft: "6px solid transparent",
@@ -152,20 +153,9 @@ export default function GlossaryTerm({ term, definition }: Props) {
             }}
           />
 
-          {/* Term title */}
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontWeight: 700,
-              fontSize: "0.82rem",
-              color: "#44403c",
-              marginBottom: "5px",
-            }}
-          >
-            <span style={{ fontSize: "0.9rem" }}>📝</span>
-            {term}
+          {/* Term */}
+          <span style={{ display: "flex", alignItems: "center", gap: "5px", fontWeight: 700, fontSize: "0.82rem", color: "#44403c", marginBottom: "5px" }}>
+            <span>📝</span>{term}
           </span>
 
           {/* Definition */}
