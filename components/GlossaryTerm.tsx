@@ -8,20 +8,18 @@ interface Props {
 }
 
 interface TooltipPos {
-  above: boolean;
-  // horizontal offset relative to the trigger span's left edge (px)
-  // used as `left` on the tooltip; we also track where the arrow should point
+  top: number;
   left: number;
-  // where the arrow sits horizontally inside the tooltip (%)
-  arrowLeft: string;
+  arrowLeft: number; // px from tooltip left edge
+  fadeUp: boolean;   // true = animate upward (tooltip is above term)
 }
 
-const TOOLTIP_W = 272; // px — must match width below
-const MARGIN = 8;      // min gap from viewport edge
+const TOOLTIP_W = 272;
+const MARGIN = 10; // min gap from viewport edges
 
 export default function GlossaryTerm({ term, definition }: Props) {
   const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState<TooltipPos>({ above: false, left: 0, arrowLeft: "50%" });
+  const [pos, setPos] = useState<TooltipPos>({ top: 0, left: 0, arrowLeft: TOOLTIP_W / 2, fadeUp: false });
   const spanRef = useRef<HTMLSpanElement>(null);
   const isMobile = useRef(false);
 
@@ -45,34 +43,38 @@ export default function GlossaryTerm({ term, definition }: Props) {
     };
   }, [visible]);
 
+  // Close on scroll (fixed tooltip would otherwise float away)
+  useEffect(() => {
+    if (!visible) return;
+    const handler = () => setVisible(false);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, [visible]);
+
   const calculatePosition = () => {
     if (!spanRef.current) return;
     const rect = spanRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-    // ── Vertical ────────────────────────────────────────────────────────────
-    const above = window.innerHeight - rect.bottom < 180 && rect.top > window.innerHeight - rect.bottom;
+    // ── Vertical: prefer below, flip above if not enough space ──────────────
+    const spaceBelow = vh - rect.bottom;
+    const spaceAbove = rect.top;
+    const above = spaceBelow < 200 && spaceAbove > spaceBelow;
 
-    // ── Horizontal ──────────────────────────────────────────────────────────
-    // Ideal: center the tooltip over the middle of the trigger span
+    const tooltipTop = above
+      ? rect.top - 8   // will be offset by height via transform below
+      : rect.bottom + 8;
+
+    // ── Horizontal: center over span, clamp to viewport ─────────────────────
     const spanCenterX = rect.left + rect.width / 2;
-    let idealLeft = spanCenterX - TOOLTIP_W / 2; // relative to viewport
-
-    // Clamp so tooltip stays inside viewport with MARGIN gap
+    const idealLeft = spanCenterX - TOOLTIP_W / 2;
     const clampedLeft = Math.max(MARGIN, Math.min(idealLeft, vw - TOOLTIP_W - MARGIN));
 
-    // Arrow position: where the span center is, relative to the clamped tooltip
-    const arrowPx = spanCenterX - clampedLeft;
-    // Clamp arrow itself so it doesn't overflow the tooltip corners (border-radius 6px)
-    const arrowPct = Math.max(12, Math.min(arrowPx, TOOLTIP_W - 12));
-    const arrowLeft = `${(arrowPct / TOOLTIP_W) * 100}%`;
+    // Arrow points to span center, clamped within tooltip bounds
+    const arrowLeft = Math.max(12, Math.min(spanCenterX - clampedLeft, TOOLTIP_W - 12));
 
-    // Convert from viewport coords to position relative to the span's offsetParent.
-    // Since the tooltip is inside the span (position:relative), we need left
-    // relative to the span's left edge.
-    const leftRelativeToSpan = clampedLeft - rect.left;
-
-    setPos({ above, left: leftRelativeToSpan, arrowLeft });
+    setPos({ top: tooltipTop, left: clampedLeft, arrowLeft, fadeUp: above });
   };
 
   const show = () => { calculatePosition(); setVisible(true); };
@@ -90,7 +92,6 @@ export default function GlossaryTerm({ term, definition }: Props) {
         }
       }}
       style={{
-        position: "relative",
         display: "inline",
         borderBottom: "1.5px dashed var(--accent)",
         color: "inherit",
@@ -105,28 +106,28 @@ export default function GlossaryTerm({ term, definition }: Props) {
           role="tooltip"
           aria-label={`Визначення: ${term}`}
           style={{
-            position: "absolute",
-            left: `${pos.left}px`,
-            ...(pos.above
-              ? { bottom: "calc(100% + 8px)" }
-              : { top: "calc(100% + 8px)" }),
+            // fixed = relative to viewport, never clipped by parent overflow/padding
+            position: "fixed",
+            top: pos.fadeUp ? undefined : pos.top,
+            bottom: pos.fadeUp ? `${window.innerHeight - pos.top}px` : undefined,
+            left: pos.left,
             zIndex: 9999,
             width: `${TOOLTIP_W}px`,
             background: "#fef9c3",
             color: "#1c1917",
             borderRadius: "6px",
             padding: "10px 12px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.20), 0 1px 4px rgba(0,0,0,0.10)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.22), 0 1px 4px rgba(0,0,0,0.10)",
             rotate: "-1deg",
             fontSize: "0.78rem",
             lineHeight: "1.55",
             pointerEvents: "none",
-            animation: pos.above
+            animation: pos.fadeUp
               ? "glossary-fade-up 0.18s ease forwards"
               : "glossary-fade-down 0.18s ease forwards",
           }}
         >
-          {/* Arrow — follows span center even when tooltip is clamped */}
+          {/* Arrow — always points to the span center */}
           <span
             style={{
               position: "absolute",
@@ -135,7 +136,7 @@ export default function GlossaryTerm({ term, definition }: Props) {
               width: 0,
               height: 0,
               display: "block",
-              ...(pos.above
+              ...(pos.fadeUp
                 ? {
                     bottom: "-6px",
                     borderLeft: "6px solid transparent",
