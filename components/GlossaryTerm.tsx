@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   term: string;
@@ -48,10 +49,12 @@ export default function GlossaryTerm({ term, definition }: Props) {
     arrowLeft: TOOLTIP_W / 2,
     above: false,
   });
+  const [mounted, setMounted] = useState(false);
   const spanRef = useRef<HTMLSpanElement>(null);
   const isMobile = useRef(false);
 
   useEffect(() => {
+    setMounted(true);
     isMobile.current = window.matchMedia("(hover: none)").matches;
   }, []);
 
@@ -78,6 +81,47 @@ export default function GlossaryTerm({ term, definition }: Props) {
   };
   const close = () => setState((s) => ({ ...s, visible: false }));
 
+  const tooltip = state.visible && mounted ? (
+    <span
+      role="tooltip"
+      style={{
+        position: "fixed",
+        top: state.top,
+        left: state.left,
+        width: TOOLTIP_W,
+        zIndex: 9999,
+        background: "#fef9c3",
+        color: "#1c1917",
+        borderRadius: "8px",
+        padding: "10px 12px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.20)",
+        transform: "rotate(-1deg)",
+        fontSize: "0.78rem",
+        lineHeight: "1.55",
+        pointerEvents: "none",
+        animation: state.above
+          ? "glossary-fade-up 0.15s ease forwards"
+          : "glossary-fade-down 0.15s ease forwards",
+      }}
+    >
+      {/* arrow */}
+      <span style={{
+        position: "absolute",
+        left: state.arrowLeft,
+        transform: "translateX(-50%)",
+        width: 0, height: 0, display: "block",
+        ...(state.above
+          ? { bottom: -6, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid #fef9c3" }
+          : { top: -6, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid #fef9c3" }),
+      }} />
+
+      <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: "0.82rem", color: "#44403c", marginBottom: 5 }}>
+        <span>📝</span>{term}
+      </span>
+      <span style={{ color: "#57534e", display: "block" }}>{definition}</span>
+    </span>
+  ) : null;
+
   return (
     <>
       <span
@@ -100,46 +144,7 @@ export default function GlossaryTerm({ term, definition }: Props) {
         {term}
       </span>
 
-      {state.visible && (
-        <span
-          role="tooltip"
-          style={{
-            position: "fixed",
-            top: state.top,
-            left: state.left,
-            width: TOOLTIP_W,
-            zIndex: 9999,
-            background: "#fef9c3",
-            color: "#1c1917",
-            borderRadius: "8px",
-            padding: "10px 12px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.20)",
-            rotate: "-1deg",
-            fontSize: "0.78rem",
-            lineHeight: "1.55",
-            pointerEvents: "none",
-            animation: state.above
-              ? "glossary-fade-up 0.15s ease forwards"
-              : "glossary-fade-down 0.15s ease forwards",
-          }}
-        >
-          {/* arrow */}
-          <span style={{
-            position: "absolute",
-            left: state.arrowLeft,
-            transform: "translateX(-50%)",
-            width: 0, height: 0, display: "block",
-            ...(state.above
-              ? { bottom: -6, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid #fef9c3" }
-              : { top: -6, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid #fef9c3" }),
-          }} />
-
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: "0.82rem", color: "#44403c", marginBottom: 5 }}>
-            <span>📝</span>{term}
-          </span>
-          <span style={{ color: "#57534e", display: "block" }}>{definition}</span>
-        </span>
-      )}
+      {mounted && createPortal(tooltip, document.body)}
     </>
   );
 }
